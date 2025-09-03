@@ -1,0 +1,161 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: kade_postgres
+    environment:
+      POSTGRES_DB: kade_connect
+      POSTGRES_USER: kade_user
+      POSTGRES_PASSWORD: kade_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kade_user -d kade_connect"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache and Session Store
+  redis:
+    image: redis:7-alpine
+    container_name: kade_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # RabbitMQ Message Queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: kade_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: kade_user
+      RABBITMQ_DEFAULT_PASS: kade_password
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # FastAPI Backend Application
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kade_backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://kade_user:kade_password@postgres:5432/kade_connect
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://kade_user:kade_password@rabbitmq:5672/
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Worker for Background Tasks
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kade_celery_worker
+    command: celery -A backend.worker worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://kade_user:kade_password@postgres:5432/kade_connect
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://kade_user:kade_password@rabbitmq:5672/
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+
+  # Flower - Celery Monitoring
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kade_flower
+    command: celery -A backend.worker flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - redis
+      - celery_worker
+
+  # pgAdmin for Database Management (Development only)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: kade_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@kadeconnect.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    profiles:
+      - dev
+
+  # MinIO for local S3-compatible object storage (Development only)
+  minio:
+    image: minio/minio:latest
+    container_name: kade_minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio_data:/data
+    profiles:
+      - dev
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  pgadmin_data:
+  minio_data:
+
+networks:
+  default:
+    name: kade_network

@@ -1,0 +1,62 @@
+# Backend Python Dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.1
+pydantic==2.5.0
+
+# AI/ML Dependencies
+langchain==0.1.0
+openai==1.6.1
+google-cloud-vision==3.4.5
+numpy==1.25.2
+pandas==2.1.4
+scikit-learn==1.3.2
+
+# Database & Caching
+redis==5.0.1
+pgvector==0.2.4
+
+# Message Queue
+celery==5.3.4
+kombu==5.3.4
+flower==2.0.1
+
+# Authentication & Security
+supabase==2.0.2
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# HTTP & API
+httpx==0.25.2
+requests==2.31.0
+aiofiles==23.2.1
+
+# Image Processing
+opencv-python==4.8.1.78
+pillow==10.1.0
+
+# Cloud Services
+boto3==1.34.0
+stripe==7.8.0
+googlemaps==4.10.0
+
+# Optimization
+ortools==9.8.3296
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+httpx==0.25.2
+
+# Development
+python-dotenv==1.0.0
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
+
+# Monitoring
+sentry-sdk[fastapi]==1.38.0
